@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { LogOut, Users, Wifi, WifiOff, MessageCircle } from 'lucide-react';
 
 const Chat = () => {
-  const { user, logout } = useAuthStore();
+  const { user, logout, users, fetchUsers, loading: authLoading } = useAuthStore();
   const {
     connectSocket,
     disconnectSocket,
@@ -26,6 +26,11 @@ const Chat = () => {
     return () => store.disconnectSocket();
   }, [user]);
 
+
+  useEffect(() => {
+    if (user) fetchUsers();
+  }, [user]);
+
   useEffect(() => {
     if (error) toast.error(`Chat error: ${error}`);
   }, [error]);
@@ -35,6 +40,18 @@ const Chat = () => {
     await logout();
     toast.success('Logged out successfully');
   };
+
+  // FIXED: Show loading only while auth is loading
+  if (authLoading) {
+    return (
+      <div className="flex flex-col flex-1 bg-linear-to-br from-slate-50 via-blue-50 to-indigo-100 px-4 py-6">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl font-medium text-indigo-600">Restoring session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-100 py-6 px-4 relative overflow-hidden">
@@ -52,7 +69,7 @@ const Chat = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12  bg-opacity-20 rounded-xl flex items-center justify-center">
-                  <MessageCircle className="w-8 h-8" />
+                  <MessageCircle className="w-6 h-6" />
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">Real-Time Chat Room</h2>
@@ -85,55 +102,59 @@ const Chat = () => {
 
         {/* Main Chat Container */}
         <div className="bg-white bg-opacity-90 backdrop-blur-lg rounded-2xl shadow-xl overflow-hidden border border-white border-opacity-20">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 h-[calc(100vh-200px)]">
-            {/* Online Users Sidebar */}
-            <div className="lg:col-span-1 bg-linear-to-br from-slate-50 to-indigo-50 p-6 border-r border-slate-200 overflow-y-auto">
-              <div className="sticky top-0 bg-linear-to-br from-slate-50 to-indigo-50 pb-4 mb-4 border-b border-slate-300">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 flex-1 min-h-0">
+            {/* All Users Sidebar (Online + Offline) */}
+            <div className="lg:col-span-1 flex flex-col min-h-0 bg-linear-to-br from-slate-50 to-indigo-50 border-r border-slate-200">
+              <div className="shrink-0 p-6 border-b border-slate-300">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-linear-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center">
                     <Users className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">Active Users</h3>
-                    <p className="text-xs text-slate-600">{onlineUsers.length} online now</p>
+                    <h3 className="text-lg font-bold text-slate-900">All Users</h3>
+                    <p className="text-xs text-slate-600">
+                      {users.filter(u => u.uid !== user?.uid).length} total • {onlineUsers.filter(email => email !== user?.email).length} online
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <ul className="space-y-2">
-                {onlineUsers.length === 0 ? (
+
+              <ul className="flex-1 min-h-0 overflow-y-auto space-y-2 px-6 py-4">
+                {users.length <= 1 ? (
                   <li className="text-center py-8 text-gray-500">
-                    No users online yet
+                    No users found
                   </li>
                 ) : (
-                  onlineUsers
-                    .filter((email) => email !== user?.email)
-                    .map((email) => {
-                      // FIXED: Sort emails to make roomId the same for both sender and receiver
-                      const sortedEmails = [user?.email, email].sort();
-                      const roomId = sortedEmails.join('_');
-
+                  users
+                    .filter((u) => u.uid !== user?.uid) // Exclude self
+                    .map((u) => {
+                      const isOnline = onlineUsers.includes(u.email);
+                      const sorted = [user?.email, u.email].sort();
+                      const roomId = sorted.join('_');
                       return (
                         <li
-                          key={email}
+                          key={u.uid}
                           onClick={() => {
                             joinRoom(roomId);
-                            toast.success(`Chatting with ${email}`);
+                            toast.success(`Chatting with ${u.username || u.email}`);
                           }}
                           className="group flex items-center gap-3 p-3 rounded-xl bg-white bg-opacity-50 hover:bg-opacity-80 transition-all duration-200 cursor-pointer border border-transparent hover:border-indigo-200"
                         >
                           <div className="relative">
                             <div className="w-10 h-10 bg-linear-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                              {email.charAt(0).toUpperCase()}
+                              {(u.username || u.email)?.charAt(0).toUpperCase() || '?'}
                             </div>
-                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
                           </div>
 
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">
-                              {email}
+                              {u.username || u.email}
                             </p>
-                            <p className="text-xs text-slate-500">Click to chat</p>
+                            <p className="text-xs text-slate-500">
+                              {isOnline ? 'Online' : 'Offline'}
+                            </p>
                           </div>
                         </li>
                       );
@@ -142,12 +163,14 @@ const Chat = () => {
               </ul>
             </div>
 
+
             {/* Chat Area */}
             <div className="lg:col-span-3 flex flex-col h-full">
               <ChatBox />
             </div>
           </div>
         </div>
+
       </div>
 
       <style jsx>{`

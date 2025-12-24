@@ -12,7 +12,7 @@ const socket = io(BACKEND_URL, {
 let listenersInitialized = false;
 
 const useChatStore = create((set, get) => ({
-  messages: {}, // { [roomId]: [messages] }
+  messages: {}, // { [roomId]: [] }
   onlineUsers: [],
   socketConnected: false,
   error: null,
@@ -24,13 +24,9 @@ const useChatStore = create((set, get) => ({
     const user = useAuthStore.getState().user;
     if (!user) return;
 
-    try {
-      const token = await user.getIdToken();
-      socket.auth = { token };
-      socket.connect();
-    } catch (err) {
-      console.error('Token error:', err);
-    }
+    const token = await user.getIdToken();
+    socket.auth = { token };
+    socket.connect();
   },
 
   initListeners: () => {
@@ -38,8 +34,8 @@ const useChatStore = create((set, get) => ({
     listenersInitialized = true;
 
     socket.on('connect', () => {
-      set({ socketConnected: true, error: null });
-      console.log('Socket connected');
+      console.log('[SOCKET CONNECTED]');
+      set({ socketConnected: true });
     });
 
     socket.on('disconnect', () => {
@@ -50,63 +46,60 @@ const useChatStore = create((set, get) => ({
       set({ onlineUsers: users });
     });
 
-    // NEW: Listen for message history when joining room
-    socket.on('messageHistory', (history) => {
-      const roomId = get().activeRoomId;
-      if (roomId && Array.isArray(history)) {
-        console.log('[RECEIVED HISTORY]', history.length, 'messages for room', roomId);
-        set((state) => ({
-          messages: {
-            ...state.messages,
-            [roomId]: history,
-          },
-        }));
-      }
-    });
+    // ✅ FIXED: messageHistory WITH roomId
+    socket.on('messageHistory', ({ roomId, history }) => {
+      console.log('[HISTORY]', roomId, history.length);
 
-    socket.on('message', (msg) => {
-      const roomId = msg.roomId;
-      console.log('[RECEIVED MESSAGE]', msg);
       set((state) => ({
         messages: {
           ...state.messages,
-          [roomId]: [...(state.messages[roomId] || []), msg],
+          [roomId]: history,
+        },
+      }));
+    });
+
+    socket.on('message', (msg) => {
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [msg.roomId]: [...(state.messages[msg.roomId] || []), msg],
         },
       }));
     });
 
     socket.on('connect_error', (err) => {
+      console.error('[SOCKET ERROR]', err.message);
       set({ error: err.message });
-      console.error('Connect error:', err.message);
     });
   },
 
   joinRoom: (roomId) => {
+    console.log('[JOIN ROOM REQUEST]', roomId);
     socket.emit('joinRoom', roomId);
     set({ activeRoomId: roomId });
   },
 
   sendMessage: (text) => {
     const { activeRoomId } = get();
-    if (!socket.connected || !activeRoomId || !text.trim()) return;
+    if (!activeRoomId || !text.trim()) return;
 
-    const msg = {
+    socket.emit('message', {
       roomId: activeRoomId,
       text: text.trim(),
-    };
-
-    socket.emit('message', msg);
+    });
   },
 
   disconnectSocket: () => {
-    if (socket.connected) socket.disconnect();
-    set({
-      messages: {},
-      onlineUsers: [],
-      socketConnected: false,
-      activeRoomId: null,
-    });
-  },
+  if (socket.connected) socket.disconnect();
+
+  set((state) => ({
+    messages: state.messages,      // preserve
+    onlineUsers: [],
+    socketConnected: false,
+    activeRoomId: state.activeRoomId, // 🔒 DO NOT RESET
+  }));
+},
+
 }));
 
 export default useChatStore;
