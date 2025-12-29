@@ -10,6 +10,7 @@ const socket = io(BACKEND_URL, {
 });
 
 let listenersInitialized = false;
+  let typingTimeout = null;
 
 const useChatStore = create((set, get) => ({
   messages: {}, // { [roomId]: [] }
@@ -17,6 +18,8 @@ const useChatStore = create((set, get) => ({
   socketConnected: false,
   error: null,
   activeRoomId: null,
+  typingUsers: [],
+
 
   connectSocket: async () => {
     if (socket.connected) return;
@@ -46,10 +49,7 @@ const useChatStore = create((set, get) => ({
       set({ onlineUsers: users });
     });
 
-    // ✅ FIXED: messageHistory WITH roomId
     socket.on('messageHistory', ({ roomId, history }) => {
-      console.log('[HISTORY]', roomId, history.length);
-
       set((state) => ({
         messages: {
           ...state.messages,
@@ -67,6 +67,15 @@ const useChatStore = create((set, get) => ({
       }));
     });
 
+    // ✅ Typing indicator listener
+    socket.on('typing', ({ username, isTyping }) => {
+      set((state) => ({
+        typingUsers: isTyping
+          ? [...new Set([...state.typingUsers, username])]
+          : state.typingUsers.filter((u) => u !== username),
+      }));
+    });
+
     socket.on('connect_error', (err) => {
       console.error('[SOCKET ERROR]', err.message);
       set({ error: err.message });
@@ -74,10 +83,9 @@ const useChatStore = create((set, get) => ({
   },
 
   joinRoom: (roomId) => {
-    console.log('[JOIN ROOM REQUEST]', roomId);
-    socket.emit('joinRoom', roomId);
-    set({ activeRoomId: roomId });
-  },
+  set({ activeRoomId: roomId, typingUsers: [] });
+  socket.emit('joinRoom', roomId);
+},
 
   sendMessage: (text) => {
     const { activeRoomId } = get();
@@ -89,17 +97,46 @@ const useChatStore = create((set, get) => ({
     });
   },
 
-  disconnectSocket: () => {
-  if (socket.connected) socket.disconnect();
+emitTyping: (isTyping) => {
+  const roomId = get().activeRoomId;
+  const currentUser = useAuthStore.getState().user;
+  const users = useAuthStore.getState().users;
+  if (!roomId || !currentUser) return;
 
-  set((state) => ({
-    messages: state.messages,      // preserve
-    onlineUsers: [],
-    socketConnected: false,
-    activeRoomId: state.activeRoomId, // 🔒 DO NOT RESET
-  }));
+  // Find current user's username
+  const senderUser = users.find(u => u.uid === currentUser.uid);
+  const displayName = senderUser?.username || currentUser.email.split('@')[0] || currentUser.email;
+
+  socket.emit('typing', {
+    roomId,
+    username: displayName,  // ← Send readable name
+    isTyping,
+  });
+
+  // Auto-stop typing
+  if (isTyping) {
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      socket.emit('typing', {
+        roomId,
+        username: displayName,
+        isTyping: false,
+      });
+    }, 1000);
+  }
 },
 
+  disconnectSocket: () => {
+    if (socket.connected) socket.disconnect();
+
+    set((state) => ({
+      messages: state.messages,
+      onlineUsers: [],
+      socketConnected: false,
+      activeRoomId: state.activeRoomId,
+      typingUsers: [],
+    }));
+  },
 }));
 
 export default useChatStore;
