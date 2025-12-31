@@ -10,16 +10,15 @@ const socket = io(BACKEND_URL, {
 });
 
 let listenersInitialized = false;
-  let typingTimeout = null;
+let typingTimeout = null;
 
 const useChatStore = create((set, get) => ({
-  messages: {}, // { [roomId]: [] }
+  messages: {},
   onlineUsers: [],
   socketConnected: false,
   error: null,
   activeRoomId: null,
   typingUsers: [],
-
 
   connectSocket: async () => {
     if (socket.connected) return;
@@ -59,6 +58,10 @@ const useChatStore = create((set, get) => ({
     });
 
     socket.on('message', (msg) => {
+      console.log('[RECEIVED MESSAGE]', msg);
+      if (msg.file && !msg.file.base64) {
+  console.warn('[FILE RECEIVED WITHOUT BASE64]', msg.file);
+}
       set((state) => ({
         messages: {
           ...state.messages,
@@ -67,7 +70,6 @@ const useChatStore = create((set, get) => ({
       }));
     });
 
-    // ✅ Typing indicator listener
     socket.on('typing', ({ username, isTyping }) => {
       set((state) => ({
         typingUsers: isTyping
@@ -82,60 +84,74 @@ const useChatStore = create((set, get) => ({
     });
   },
 
+  
+
   joinRoom: (roomId) => {
-  set({ activeRoomId: roomId, typingUsers: [] });
-  socket.emit('joinRoom', roomId);
-},
-
-  sendMessage: (text) => {
-    const { activeRoomId } = get();
-    if (!activeRoomId || !text.trim()) return;
-
-    socket.emit('message', {
-      roomId: activeRoomId,
-      text: text.trim(),
-    });
+    set({ activeRoomId: roomId, typingUsers: [] });
+    socket.emit('joinRoom', roomId);
   },
 
-emitTyping: (isTyping) => {
-  const roomId = get().activeRoomId;
-  const currentUser = useAuthStore.getState().user;
-  const users = useAuthStore.getState().users;
-  if (!roomId || !currentUser) return;
+  // FIXED: Properly handle text + file
+  sendMessage: (text = '', file = null) => {
+    const { activeRoomId } = get();
+    if (!activeRoomId) return;
 
-  // Find current user's username
-  const senderUser = users.find(u => u.uid === currentUser.uid);
-  const displayName = senderUser?.username || currentUser.email.split('@')[0] || currentUser.email;
+    const payload = {
+      roomId: activeRoomId,
+      text: text.trim(),
+    };
 
-  socket.emit('typing', {
-    roomId,
-    username: displayName,  // ← Send readable name
-    isTyping,
-  });
+    if (file) {
+     payload.file = {
+  name: file.name,
+  type: file.type,
+  size: file.size,
+ base64: file.base64,
+};
+      console.log('[SENDING FILE]', payload.file.name);
+    } else {
+      console.log('[SENDING TEXT]', text);
+    }
 
-  // Auto-stop typing
-  if (isTyping) {
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-      socket.emit('typing', {
-        roomId,
-        username: displayName,
-        isTyping: false,
-      });
-    }, 1000);
-  }
-},
+    socket.emit('message', payload);
+  },
+
+  emitTyping: (isTyping) => {
+    const roomId = get().activeRoomId;
+    const currentUser = useAuthStore.getState().user;
+    const users = useAuthStore.getState().users;
+    if (!roomId || !currentUser) return;
+
+    const senderUser = users.find(u => u.uid === currentUser.uid);
+    const displayName = senderUser?.username || currentUser.email.split('@')[0] || currentUser.email;
+
+    socket.emit('typing', {
+      roomId,
+      username: displayName,
+      isTyping,
+    });
+
+    if (isTyping) {
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        socket.emit('typing', {
+          roomId,
+          username: displayName,
+          isTyping: false,
+        });
+      }, 1000);
+    }
+  },
 
   disconnectSocket: () => {
     if (socket.connected) socket.disconnect();
-
-    set((state) => ({
-      messages: state.messages,
+    set({
+      messages: {},
       onlineUsers: [],
       socketConnected: false,
-      activeRoomId: state.activeRoomId,
+      activeRoomId: null,
       typingUsers: [],
-    }));
+    });
   },
 }));
 
