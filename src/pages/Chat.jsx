@@ -4,6 +4,7 @@ import useChatStore from '../store/chatStore.js';
 import ChatBox from '../components/ChatBox.jsx';
 import toast from 'react-hot-toast';
 import { Users, Wifi, WifiOff, MessageCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import VideoCall from '../components/VideoCall.jsx'; // ← Add this
 
 const Chat = () => {
   const { user, users, fetchUsers, loading: authLoading } = useAuthStore();
@@ -229,6 +230,7 @@ const Chat = () => {
           </div>
         </div>
       </div>
+      <VideoCall />
 
       <style jsx>{`
         @keyframes blob {
@@ -267,6 +269,7 @@ const Chat = () => {
           background: rgba(99, 102, 241, 0.5);
         }
       `}</style>
+    
     </div>
   );
 };

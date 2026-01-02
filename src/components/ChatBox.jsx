@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import useChatStore from '../store/chatStore.js';
 import Message from './Message.jsx';
-import { Send, Loader2, MessageSquare, Paperclip, X } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Send, Loader2, MessageSquare, Paperclip, X, Phone, Video } from 'lucide-react';
 import MessageSkeleton from './MessageSkeleton.jsx';
+import VideoCall from './VideoCall.jsx'; 
+import toast from 'react-hot-toast';
 
 const ChatBox = () => {
-  const { messages, activeRoomId, sendMessage, emitTyping, typingUsers } = useChatStore();
+  const { messages, activeRoomId, sendMessage, emitTyping, typingUsers, startCall } = useChatStore();
 
   const [text, setText] = useState('');
   const [file, setFile] = useState(null);
@@ -76,6 +77,11 @@ const ChatBox = () => {
       setIsSending(false);
       inputRef.current?.focus();
     }
+  };
+
+  const handleStartCall = (isVideo) => {
+    startCall(isVideo);
+    toast.loading(`Starting ${isVideo ? 'video' : 'audio'} call...`, { duration: 2000 });
   };
 
   if (!activeRoomId) {
@@ -158,14 +164,16 @@ const ChatBox = () => {
           </div>
         )}
 
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-1.5 md:gap-2 items-center">
+          {/* File Button */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isSending || isLoadingMessages}
-            className="w-9 h-9 bg-linear-to-br from-indigo-100 to-purple-100 hover:from-indigo-200 hover:to-purple-200 rounded-lg flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-8 md:w-9 h-8 md:h-9 bg-linear-to-br from-indigo-100 to-purple-100 hover:from-indigo-200 hover:to-purple-200 rounded-lg flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Attach file"
           >
-            <Paperclip className="w-4 h-4 text-indigo-600" />
+            <Paperclip className="w-3.5 md:w-4 h-3.5 md:h-4 text-indigo-600" />
           </button>
 
           <input
@@ -176,6 +184,7 @@ const ChatBox = () => {
             accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.zip,.mp4"
           />
 
+          {/* Text Input */}
           <input
             ref={inputRef}
             type="text"
@@ -190,10 +199,33 @@ const ChatBox = () => {
             className="flex-1 px-3 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
           />
 
+          {/* Audio Call Button */}
+          <button
+            type="button"
+            onClick={() => handleStartCall(false)}
+            disabled={isSending || isLoadingMessages}
+            className="w-8 md:w-9 h-8 md:h-9 bg-linear-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 rounded-lg flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            title="Audio Call"
+          >
+            <Phone className="w-3.5 md:w-4 h-3.5 md:h-4 text-white" />
+          </button>
+
+          {/* Video Call Button */}
+          <button
+            type="button"
+            onClick={() => handleStartCall(true)}
+            disabled={isSending || isLoadingMessages}
+            className="w-8 md:w-9 h-8 md:h-9 bg-linear-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 rounded-lg flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            title="Video Call"
+          >
+            <Video className="w-3.5 md:w-4 h-3.5 md:h-4 text-white" />
+          </button>
+
+          {/* Send Button */}
           <button
             type="submit"
             disabled={(!text.trim() && !file) || isSending || isLoadingMessages}
-            className="bg-linear-to-r from-indigo-600 to-purple-600 text-white px-3 md:px-4 py-2 rounded-xl hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 md:gap-2 font-medium min-w-15 md:min-w-17.5"
+            className="bg-linear-to-r from-indigo-600 to-purple-600 text-white px-3 md:px-4 py-2 rounded-xl hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 font-medium min-w-15 md:min-w-17.5"
           >
             {isSending ? (
               <>
@@ -209,6 +241,8 @@ const ChatBox = () => {
           </button>
         </div>
       </form>
+
+      <VideoCall />
 
       <style jsx>{`
         @keyframes fadeIn {
