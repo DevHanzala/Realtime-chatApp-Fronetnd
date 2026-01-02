@@ -3,6 +3,7 @@ import useChatStore from '../store/chatStore.js';
 import Message from './Message.jsx';
 import { Send, Loader2, MessageSquare, Paperclip, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import MessageSkeleton from './MessageSkeleton.jsx';
 
 const ChatBox = () => {
   const { messages, activeRoomId, sendMessage, emitTyping, typingUsers } = useChatStore();
@@ -10,8 +11,8 @@ const ChatBox = () => {
   const [text, setText] = useState('');
   const [file, setFile] = useState(null);
   const [isSending, setIsSending] = useState(false);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -19,18 +20,25 @@ const ChatBox = () => {
   const roomMessages = activeRoomId ? messages[activeRoomId] || [] : [];
 
   useEffect(() => {
-    if (activeRoomId) {
-      setIsLoadingMessages(true);
-      const timer = setTimeout(() => {
-        setIsLoadingMessages(false);
-      }, 600);
-      return () => clearTimeout(timer);
-    }
+    if (!activeRoomId) return;
+
+    setIsLoadingMessages(true);
+    const timer = setTimeout(() => {
+      setIsLoadingMessages(false);
+    }, 800);
+
+    return () => clearTimeout(timer);
   }, [activeRoomId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [roomMessages.length, typingUsers.length]);
+    if (isLoadingMessages) return;
+
+    const t = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
+
+    return () => clearTimeout(t);
+  }, [roomMessages.length, typingUsers.length, isLoadingMessages]);
 
   useEffect(() => {
     if (activeRoomId && !isLoadingMessages) {
@@ -41,22 +49,13 @@ const ChatBox = () => {
   const handleFileSelect = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    
+
     if (f.size > 5 * 1024 * 1024) {
       toast.error('File size must be less than 5MB');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFile({
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        base64: reader.result,
-      });
-    };
-    reader.readAsDataURL(f);
+    setFile(f);
   };
 
   const handleSubmit = async (e) => {
@@ -81,7 +80,7 @@ const ChatBox = () => {
 
   if (!activeRoomId) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500 px-6 animate-fadeIn">
+      <div className="hidden lg:flex flex-col items-center justify-center h-full text-gray-500 px-6 animate-fadeIn">
         <div className="w-16 md:w-20 h-16 md:h-20 bg-linear-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-4 animate-bounce-slow shadow-lg">
           <MessageSquare className="w-8 md:w-10 h-8 md:h-10 text-indigo-600" />
         </div>
@@ -94,23 +93,12 @@ const ChatBox = () => {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Messages Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 md:px-4 py-3 space-y-2 bg-linear-to-b from-slate-50 to-white custom-scrollbar">
+      <div className="flex-1 min-h-0 overflow-y-auto px-2 md:px-4 py-2 md:py-3 bg-linear-to-b from-slate-50 to-white custom-scrollbar">
         {isLoadingMessages ? (
-          <div className="flex flex-col items-center justify-center h-full animate-fadeIn">
-            <div className="relative mb-4">
-              <div className="w-16 h-16 border-4 border-slate-200 rounded-full"></div>
-              <div className="absolute top-0 left-0 w-16 h-16 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
-            </div>
-            <p className="text-sm font-medium text-slate-700">Loading messages...</p>
-            <div className="flex gap-2 justify-center mt-4">
-              <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></div>
-              <div className="w-2 h-2 bg-purple-600 rounded-full animate-bounce animation-delay-200"></div>
-              <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce animation-delay-400"></div>
-            </div>
-          </div>
+          <MessageSkeleton />
         ) : roomMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500 animate-fadeIn">
-            <div className="w-14 md:w-16 h-14 md:h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-3">
+            <div className="w-14 md:w-16 h-14 md:h-16 bg-linear-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-3 shadow-lg">
               <MessageSquare className="w-7 md:w-8 h-7 md:h-8 text-indigo-600" />
             </div>
             <p className="text-center text-gray-600 font-medium text-sm md:text-base">No messages yet</p>
@@ -123,7 +111,7 @@ const ChatBox = () => {
             ))}
 
             {typingUsers.length > 0 && (
-              <div className="flex items-start gap-2 px-2 py-2 animate-fadeInUp">
+              <div className="flex items-start gap-2 px-1 py-2 animate-fadeInUp">
                 <div className="flex items-center gap-2 bg-white rounded-2xl px-3 py-2 shadow-sm border border-gray-200">
                   <div className="w-7 h-7 rounded-full bg-linear-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-semibold text-xs shrink-0">
                     {typingUsers[0].charAt(0).toUpperCase()}
@@ -145,14 +133,14 @@ const ChatBox = () => {
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSubmit} className="shrink-0 border-t border-gray-200 p-3 bg-white shadow-lg">
+      <form onSubmit={handleSubmit} className="shrink-0 border-t border-gray-200 p-2 md:p-3 bg-white shadow-lg">
         {/* File Preview */}
         {file && (
           <div className="mb-2 flex items-center gap-2 bg-linear-to-r from-indigo-50 to-purple-50 p-2 rounded-lg border border-indigo-200 animate-fadeIn">
             {file.type.startsWith('image/') ? (
-              <img src={file.base64} alt="preview" className="w-12 h-12 object-cover rounded-lg" />
+              <img src={URL.createObjectURL(file)} className="w-12 h-12 object-cover rounded-lg" alt="preview" />
             ) : (
-              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+              <div className="w-12 h-12 bg-linear-to-br from-indigo-100 to-purple-100 rounded-lg flex items-center justify-center">
                 <Paperclip className="w-6 h-6 text-indigo-600" />
               </div>
             )}
@@ -185,7 +173,7 @@ const ChatBox = () => {
             type="file"
             className="hidden"
             onChange={handleFileSelect}
-            accept="image/*,.pdf,.doc,.docx,.txt"
+            accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.zip,.mp4"
           />
 
           <input
@@ -205,7 +193,7 @@ const ChatBox = () => {
           <button
             type="submit"
             disabled={(!text.trim() && !file) || isSending || isLoadingMessages}
-            className="bg-linear-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 rounded-xl hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium min-w-17.5"
+            className="bg-linear-to-r from-indigo-600 to-purple-600 text-white px-3 md:px-4 py-2 rounded-xl hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 md:gap-2 font-medium min-w-15 md:min-w-17.5"
           >
             {isSending ? (
               <>

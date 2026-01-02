@@ -6,11 +6,43 @@ const Message = ({ msg }) => {
   const isOwn = msg.sender === user?.uid;
   const [showImage, setShowImage] = useState(false);
 
-  const hasImage = msg.file?.type?.startsWith('image/');
-  const hasText = msg.text?.trim();
+  const file = msg.file;
 
-  const sender = users.find(u => u.uid === msg.sender)?.username ||
-                 users.find(u => u.uid === msg.sender)?.email || 'User';
+  // ✅ ROBUST IMAGE DETECTION
+  const isImage =
+    Boolean(file?.url) &&
+    /\.(jpg|jpeg|png|webp|gif)$/i.test(file.url);
+
+  const sender =
+    users.find(u => u.uid === msg.sender)?.username ||
+    users.find(u => u.uid === msg.sender)?.email ||
+    'User';
+
+  // ✅ FORCE DOWNLOAD (NO NEW TAB, NO 401)
+  const forceDownload = async () => {
+    try {
+      const res = await fetch(file.url, {
+        mode: 'cors',
+        credentials: 'omit',
+      });
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name || 'download';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('Download failed');
+    }
+  };
 
   return (
     <>
@@ -23,75 +55,98 @@ const Message = ({ msg }) => {
             </div>
           )}
 
-          <div
-            className={`px-3 py-2 rounded-2xl shadow-sm ${
-              isOwn
+          <div className="flex flex-col">
+            {/* Sender name */}
+            {!isOwn && (
+              <p className="text-xs text-indigo-600 font-semibold mb-1 px-1">
+                {sender}
+              </p>
+            )}
+
+            <div
+              className={`rounded-2xl px-3 py-2 shadow-sm ${isOwn
                 ? 'bg-linear-to-r from-indigo-600 to-purple-600 text-white rounded-br-none'
                 : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
-            }`}
-          >
-            {/* Sender name for other users */}
-            {!isOwn && (
-              <p className="text-xs font-semibold mb-1 text-indigo-600">{sender}</p>
-            )}
+                }`}
+            >
+              {/* ✅ IMAGE */}
+              {isImage && (
+                <img
+                  src={file.url}
+                  alt={file.name}
+                  className="w-full max-w-62.5 max-h-50 object-cover rounded-xl mb-1 cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setShowImage(true)}
+                  loading="lazy"
+                />
+              )}
 
-            {/* IMAGE MESSAGE */}
-            {hasImage && (
-              <img
-                src={msg.file.base64}
-                alt={msg.file.name}
-                className="w-full max-w-62.5 max-h-50 object-cover rounded-xl mb-1 cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setShowImage(true)}
-                loading="lazy"
-              />
-            )}
+              {/* ✅ TEXT */}
+              {msg.text && (
+                <p className="text-sm wrap-break-word leading-relaxed">{msg.text}</p>
+              )}
 
-            {/* TEXT MESSAGE */}
-            {hasText && <p className="text-sm wrap-break-word leading-relaxed">{msg.text}</p>}
+              {/* ✅ NON-IMAGE FILE */}
+              {file && !isImage && (
+                <button
+                  onClick={forceDownload}
+                  className={`text-xs font-medium underline inline-flex items-center gap-1 ${isOwn
+                    ? 'text-indigo-200 hover:text-white'
+                    : 'text-indigo-600 hover:text-indigo-700'
+                    } transition-colors`}
+                >
+                  📎 {file.name}
+                </button>
+              )}
 
-            {/* FILE (NON-IMAGE) */}
-            {msg.file && !hasImage && (
-              <a
-                href={msg.file.base64}
-                download={msg.file.name}
-                className={`mt-1 inline-block text-xs font-medium underline ${
-                  isOwn ? 'text-indigo-200 hover:text-white' : 'text-indigo-600 hover:text-indigo-700'
-                } transition-colors`}
-              >
-                📎 {msg.file.name}
-              </a>
-            )}
 
-            <p className={`text-[10px] mt-1 ${isOwn ? 'text-indigo-200' : 'text-gray-500'}`}>
-              {new Date(msg.timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </p>
+
+              {/* Timestamp */}
+              <p className={`text-[10px] mt-1 ${isOwn ? 'text-indigo-200' : 'text-gray-500'}`}>
+                {new Date(msg.timestamp).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* FULLSCREEN IMAGE VIEWER */}
-      {showImage && (
+      {/* ✅ FULLSCREEN IMAGE VIEWER */}
+      {showImage && isImage && (
         <div
           className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4 animate-fadeIn"
           onClick={() => setShowImage(false)}
         >
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={() => setShowImage(false)}
-              className="absolute -top-7  -right-3 w-10 h-10   text-white   cursor-pointer text-2xl  transition-all "
+              className="absolute md:top-12 top-3 right-2 w-10 h-10 rounded-full
+           bg-black/40 hover:bg-black/60
+           text-white text-2xl
+           flex items-center justify-center
+           backdrop-blur-sm z-50"
+
               aria-label="Close image"
             >
               ×
             </button>
 
             <img
-              src={msg.file.base64}
-              alt="full"
-              className="max-w-[95vw] max-h-[95vh] rounded-xl shadow-2xl"
+              src={file.url}
+              alt={file.name}
+              className="max-w-[95vw] max-h-[95vh]   rounded-xl shadow-2xl"
             />
+
+            <button
+              onClick={forceDownload}
+              className="absolute -bottom-12 right-0 bg-linear-to-br from-indigo-500 to-purple-500 bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-full text-sm font-medium transition-all backdrop-blur-sm flex items-center gap-2"
+            >
+              ⬇️ Download
+            </button>
           </div>
         </div>
       )}

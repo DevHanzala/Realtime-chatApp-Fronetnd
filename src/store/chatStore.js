@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import useAuthStore from './authStore.js';
+import { uploadToCloudinary } from '../config/uploadToCloudinary';
+
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -59,9 +61,6 @@ const useChatStore = create((set, get) => ({
 
     socket.on('message', (msg) => {
       console.log('[RECEIVED MESSAGE]', msg);
-      if (msg.file && !msg.file.base64) {
-  console.warn('[FILE RECEIVED WITHOUT BASE64]', msg.file);
-}
       set((state) => ({
         messages: {
           ...state.messages,
@@ -92,29 +91,29 @@ const useChatStore = create((set, get) => ({
   },
 
   // FIXED: Properly handle text + file
-  sendMessage: (text = '', file = null) => {
-    const { activeRoomId } = get();
-    if (!activeRoomId) return;
+sendMessage: async (text = '', file = null) => {
+  const { activeRoomId } = get();
+  if (!activeRoomId) return;
 
-    const payload = {
-      roomId: activeRoomId,
-      text: text.trim(),
+  const payload = {
+    roomId: activeRoomId,
+    text: text.trim(),
+  };
+
+  if (file) {
+    const uploaded = await uploadToCloudinary(file);
+
+    payload.file = {
+      url: uploaded.secure_url,          // ✅ persistable
+      name: file.name,
+      type: file.type,                   // ✅ image/png, application/pdf
+      size: uploaded.bytes,              // ✅ required
     };
+  }
 
-    if (file) {
-     payload.file = {
-  name: file.name,
-  type: file.type,
-  size: file.size,
- base64: file.base64,
-};
-      console.log('[SENDING FILE]', payload.file.name);
-    } else {
-      console.log('[SENDING TEXT]', text);
-    }
+  socket.emit('message', payload);
+},
 
-    socket.emit('message', payload);
-  },
 
   emitTyping: (isTyping) => {
     const roomId = get().activeRoomId;

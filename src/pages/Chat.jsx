@@ -129,57 +129,75 @@ const Chat = () => {
                   </div>
                 </div>
               </div>
+<ul className="flex-1 min-h-0 overflow-y-auto space-y-2 px-3 md:px-4 py-3 custom-scrollbar">
+  {/* Show loading skeleton while fetching users */}
+  {authLoading || users.length === 0 ? (
+    <div className="space-y-2 animate-fadeIn">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-xl bg-white bg-opacity-50 animate-pulse">
+          <div className="w-9 md:w-10 h-9 md:h-10 bg-linear-to-br from-gray-200 to-gray-300 rounded-full shrink-0"></div>
+          <div className="flex-1">
+            <div className="h-3 bg-gray-300 rounded w-24 mb-2"></div>
+            <div className="h-2 bg-gray-200 rounded w-16"></div>
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : users.filter(u => u.uid !== user?.uid).length === 0 ? (
+    <li className="text-center py-8 text-gray-500 text-sm animate-fadeIn">
+      <div className="w-16 h-16 bg-linear-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
+        <Users className="w-8 h-8 text-gray-400" />
+      </div>
+      <p className="font-medium text-gray-600">No users found</p>
+      <p className="text-xs text-gray-500 mt-1">Check back later</p>
+    </li>
+  ) : (
+    users
+      .filter((u) => u.uid !== user?.uid)
+      .map((u) => {
+        const isOnline = onlineUsers.includes(u.email);
+        const sorted = [user?.email, u.email].sort();
+        const roomId = sorted.join('_');
+        const isActive = activeRoomId === roomId;
 
-              <ul className="flex-1 min-h-0 overflow-y-auto space-y-2 px-3 md:px-4 py-3 custom-scrollbar">
-                {users.length <= 1 ? (
-                  <li className="text-center py-8 text-gray-500 text-sm">No users found</li>
-                ) : (
-                  users
-                    .filter((u) => u.uid !== user?.uid)
-                    .map((u) => {
-                      const isOnline = onlineUsers.includes(u.email);
-                      const sorted = [user?.email, u.email].sort();
-                      const roomId = sorted.join('_');
-                      const isActive = activeRoomId === roomId;
+        return (
+          <li
+            key={u.uid}
+            onClick={() => handleUserClick(u)}
+            className={`group flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-xl transition-all duration-200 cursor-pointer animate-fadeIn ${
+              isActive
+                ? 'bg-linear-to-r from-indigo-500 to-purple-500 text-white shadow-lg border-2 border-indigo-400'
+                : 'bg-white bg-opacity-50 hover:bg-opacity-80 border border-transparent hover:border-indigo-200'
+            }`}
+          >
+            <div className="relative shrink-0">
+              <div className={`w-9 md:w-10 h-9 md:h-10 rounded-full flex items-center justify-center font-semibold text-sm ${
+                isActive ? 'bg-white text-indigo-600' : 'bg-linear-to-br from-indigo-500 to-purple-500 text-white'
+              }`}>
+                {(u.username || u.email)?.charAt(0).toUpperCase() || '?'}
+              </div>
+              <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
+                isActive ? 'border-indigo-500' : 'border-white'
+              } ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+            </div>
 
-                      return (
-                        <li
-                          key={u.uid}
-                          onClick={() => handleUserClick(u)}
-                          className={`group flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-xl transition-all duration-200 cursor-pointer ${
-                            isActive
-                              ? 'bg-linear-to-r from-indigo-500 to-purple-500 text-white shadow-lg border-2 border-indigo-400'
-                              : 'bg-white bg-opacity-50 hover:bg-opacity-80 border border-transparent hover:border-indigo-200'
-                          }`}
-                        >
-                          <div className="relative shrink-0">
-                            <div className={`w-9 md:w-10 h-9 md:h-10 rounded-full flex items-center justify-center font-semibold text-sm ${
-                              isActive ? 'bg-white text-indigo-600' : 'bg-linear-to-br from-indigo-500 to-purple-500 text-white'
-                            }`}>
-                              {(u.username || u.email)?.charAt(0).toUpperCase() || '?'}
-                            </div>
-                            <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 ${
-                              isActive ? 'border-indigo-500' : 'border-white'
-                            } ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                          </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold truncate transition-colors ${
+                isActive ? 'text-white' : 'text-slate-800 group-hover:text-indigo-600'
+              }`}>
+                {u.username || u.email}
+              </p>
+              <p className={`text-xs ${isActive ? 'text-indigo-100' : 'text-slate-500'}`}>
+                {isOnline ? 'Online' : 'Offline'}
+              </p>
+            </div>
 
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-semibold truncate transition-colors ${
-                              isActive ? 'text-white' : 'text-slate-800 group-hover:text-indigo-600'
-                            }`}>
-                              {u.username || u.email}
-                            </p>
-                            <p className={`text-xs ${isActive ? 'text-indigo-100' : 'text-slate-500'}`}>
-                              {isOnline ? 'Online' : 'Offline'}
-                            </p>
-                          </div>
-
-                          {isActive && <div className="text-white text-xs font-bold">●</div>}
-                        </li>
-                      );
-                    })
-                )}
-              </ul>
+            {isActive && <div className="text-white text-xs font-bold">●</div>}
+          </li>
+        );
+      })
+  )}
+</ul>
             </div>
 
             {/* Chat Area */}
